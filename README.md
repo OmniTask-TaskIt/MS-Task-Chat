@@ -517,6 +517,7 @@ Copiar `.env.example` y ajustar los valores del entorno:
 | `REDIS_ADDR` | Dirección `host:port` de Redis. | `localhost:6379`. |
 | `REDIS_PASSWORD` | Contraseña de Redis. | Vacía. |
 | `REDIS_DB` | Número de base Redis; si no es entero se usa `0`. | `0`. |
+| `REDIS_TLS` | Activa TLS para Redis administrado, como Upstash. | `false`. |
 | `RABBITMQ_URL` | URL de conexión del consumidor RabbitMQ. | `amqp://localhost:5672/`. |
 | `RABBITMQ_PREFETCH` | Número máximo de eventos sin confirmar por consumidor. | `10`. |
 | `RABBITMQ_CONSUMER` | Prefijo del nombre de los consumidores. | `chat-service`. |
