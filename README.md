@@ -32,7 +32,7 @@ cmd/chat/
     Punto de entrada; crea el bootstrap y ejecuta la aplicación.
 
 internal/domain/model/
-    Chat, Message y User.
+    Chat y Message.
 
 internal/domain/repository/
     Contratos ChatRepository y MessageRepository, además de errores de dominio.
@@ -102,7 +102,7 @@ flowchart LR
 | `ChatID` | `string` (`chatId`) | Identificador del chat. |
 | `SellerID` | `string` (`sellerId`) | Identificador del vendedor; también se usa para el índice de participantes cuando es numérico. |
 | `BuyerID` | `*int64` (`buyerId`) | Identificador opcional del comprador. |
-| `Participants` | `[]User` (`participants`) | Participantes del modelo de dominio. `User` actualmente no tiene campos. |
+| `Participants` | `[]string` (`participants`) | IDs de los participantes del chat. |
 | `Active` | `bool` (`active`) | Estado activo del chat. |
 | `CreatedAt` | `time.Time` (`createdAt`) | Fecha de creación. |
 | `Messages` | `[]Message` (`messages`) | Mensajes embebidos en el modelo; el adaptador Redis los separa en estructuras propias. |
@@ -123,12 +123,6 @@ se guarda en el repositorio de mensajes.
 | `SenderID` | `int64` (`senderId`) | Identidad del remitente recibida por el servicio. |
 | `Content` | `string` (`content`) | Contenido del mensaje. |
 | `Timestamp` | `time.Time` (`timestamp`) | Marca temporal usada también para ordenar el historial. |
-
-### `User`
-
-`User` es actualmente una estructura vacía. El chat mantiene el campo
-`Participants`, pero no hay campos adicionales ni reglas de autorización
-basadas en él implementadas en este repositorio.
 
 ## Casos de uso y contratos
 

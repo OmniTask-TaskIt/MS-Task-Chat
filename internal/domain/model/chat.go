@@ -6,7 +6,7 @@ type Chat struct {
 	ChatID       string    `json:"chatId"`
 	SellerID     string    `json:"sellerId"`
 	BuyerID      *int64    `json:"buyerId"`
-	Participants []User    `json:"participants"`
+	Participants []string  `json:"participants"`
 	Active       bool      `json:"active"`
 	CreatedAt    time.Time `json:"createdAt"`
 	Messages     []Message `json:"messages"`
