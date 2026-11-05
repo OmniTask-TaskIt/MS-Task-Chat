@@ -8,8 +8,8 @@ en memoria mediante un Hub.
 Redis es el almacenamiento persistente de chats y mensajes. Los chats y sus
 mensajes no expiran automáticamente: permanecen hasta que una operación de
 borrado los elimina explícitamente. En esta versión no hay integración
-implementada con RabbitMQ o Kafka; el archivo `.env.example` conserva
-`RABBITMQ_URL` como configuración prevista, pero el bootstrap no la utiliza.
+implementada con Kafka. RabbitMQ se utiliza para recibir los eventos de
+creación y eliminación de chats.
 
 ## Tecnologías utilizadas
 
@@ -50,7 +50,7 @@ internal/infra/inbound/
     Controladores HTTP Gin y controlador de entrada WebSocket.
 
 internal/infra/outbound/
-    Adaptadores Redis, Hub en memoria y distribución WebSocket.
+    Adaptadores Redis, RabbitMQ, Hub en memoria y distribución WebSocket.
 
 internal/infrastructure/
     Inicialización técnica del cliente Redis y documentación de configuración.
@@ -184,7 +184,38 @@ sequenceDiagram
     end
 ```
 
-No se utiliza RabbitMQ ni Kafka en este flujo.
+El evento de creación se recibe desde RabbitMQ y se persiste mediante el mismo
+repositorio Redis. El evento de eliminación elimina el chat por `taskId`,
+incluyendo sus índices y mensajes.
+
+## Eventos RabbitMQ
+
+El consumidor declara el exchange `chat.exchange`, las colas durables
+`chat.create.queue` y `chat.delete.queue`, y las vincula con las claves
+`chat.create` y `chat.delete`.
+
+El evento de creación esperado es:
+
+```json
+{
+  "taskId": "task-123",
+  "taskName": "Arreglar bicicleta",
+  "taskOwner": "101",
+  "taskAssignee": "202"
+}
+```
+
+El evento de eliminación esperado es:
+
+```json
+{
+  "taskId": "task-123"
+}
+```
+
+Para crear el chat se usa `taskId` como `chatId` y `taskId`; los identificadores
+numéricos del asignado también se agregan al índice de participantes de Redis.
+La aplicación valida Redis y RabbitMQ durante el arranque.
 
 ## Flujo de conexión y recuperación del historial
 
@@ -492,7 +523,9 @@ Copiar `.env.example` y ajustar los valores del entorno:
 | `REDIS_ADDR` | Dirección `host:port` de Redis. | `localhost:6379`. |
 | `REDIS_PASSWORD` | Contraseña de Redis. | Vacía. |
 | `REDIS_DB` | Número de base Redis; si no es entero se usa `0`. | `0`. |
-| `RABBITMQ_URL` | Reservada para una futura integración; no se consume. | `amqp://localhost:5672/`. |
+| `RABBITMQ_URL` | URL de conexión del consumidor RabbitMQ. | `amqp://localhost:5672/`. |
+| `RABBITMQ_PREFETCH` | Número máximo de eventos sin confirmar por consumidor. | `10`. |
+| `RABBITMQ_CONSUMER` | Prefijo del nombre de los consumidores. | `chat-service`. |
 
 Ejemplo:
 
@@ -568,8 +601,7 @@ Estas capacidades no están implementadas actualmente:
 - Caso de uso y endpoint para crear, actualizar o eliminar chats desde una API
   pública.
 - Autenticación real y autorización de acceso por participantes.
-- Integración con RabbitMQ o Kafka; el archivo `internal/infrastructure/rabbitmq`
-  solo contiene documentación de infraestructura.
+- Reconexión automática de RabbitMQ ante una caída de la conexión.
 - Distribución del Hub entre varias instancias; las conexiones y salas son
   locales a un proceso.
 - Endpoint HTTP de health/readiness.

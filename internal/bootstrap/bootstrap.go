@@ -13,8 +13,10 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/application/service"
+	rabbitconfig "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/config"
 	httpin "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/inbound/http"
 	wsin "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/inbound/websocket"
+	rabbitout "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/outbound/rabbit"
 	redisout "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/outbound/redis"
 	wsout "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/outbound/websocket"
 	redisinfra "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infrastructure/redis"
@@ -24,6 +26,8 @@ type App struct {
 	server      *http.Server
 	hub         *wsout.Hub
 	redisClient *goredis.Client
+	chatRepo    *redisout.ChatRepository
+	rabbit      *rabbitout.Consumer
 }
 
 func NewApp() *App {
@@ -48,6 +52,7 @@ func NewApp() *App {
 	return &App{
 		hub:         hub,
 		redisClient: redisClient,
+		chatRepo:    chatRepository,
 		server: &http.Server{
 			Addr:              ":" + port,
 			Handler:           router,
@@ -64,6 +69,12 @@ func (a *App) Run() error {
 	if err := a.redisClient.Ping(context.Background()).Err(); err != nil {
 		return err
 	}
+	rabbitConsumer, err := rabbitout.NewConsumer(context.Background(), rabbitconfig.RabbitConfigFromEnv(), rabbitout.NewHandler(a.chatRepo))
+	if err != nil {
+		return err
+	}
+	a.rabbit = rabbitConsumer
+	defer a.rabbit.Close()
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(stop)
