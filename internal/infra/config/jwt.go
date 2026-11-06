@@ -34,12 +34,13 @@ func (v *JWTValidator) Validate(tokenString string) (string, error) {
 		return "", ErrInvalidJWT
 	}
 
+	signingMethod := signingMethodForSecret(v.secret)
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if token.Method != jwt.SigningMethodHS256 {
+		if token.Method.Alg() != signingMethod.Alg() {
 			return nil, ErrInvalidJWT
 		}
 		return v.secret, nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
+	}, jwt.WithValidMethods([]string{signingMethod.Alg()}), jwt.WithExpirationRequired())
 	if err != nil || !token.Valid {
 		return "", ErrInvalidJWT
 	}
@@ -48,6 +49,7 @@ func (v *JWTValidator) Validate(tokenString string) (string, error) {
 	if !ok {
 		return "", ErrInvalidJWT
 	}
+
 	if role, ok := claims["role"].(string); !ok || strings.TrimSpace(role) == "" {
 		return "", ErrInvalidJWT
 	}
@@ -58,6 +60,17 @@ func (v *JWTValidator) Validate(tokenString string) (string, error) {
 		}
 	}
 	return "", ErrInvalidJWT
+}
+
+func signingMethodForSecret(secret []byte) jwt.SigningMethod {
+	switch {
+	case len(secret) >= 64:
+		return jwt.SigningMethodHS512
+	case len(secret) >= 48:
+		return jwt.SigningMethodHS384
+	default:
+		return jwt.SigningMethodHS256
+	}
 }
 
 func claimString(value interface{}) string {
