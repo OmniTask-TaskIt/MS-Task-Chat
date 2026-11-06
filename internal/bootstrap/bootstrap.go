@@ -37,7 +37,7 @@ func NewApp() *App {
 	messageRepository := redisout.NewMessageRepository(redisClient)
 	sendMessage := service.NewSendMessageService(chatRepository, messageRepository, wsout.NewChatWebSocket(hub))
 	getHistory := service.NewGetMessageHistoryService(chatRepository, messageRepository)
-	chatHTTP := httpin.NewChatController(getHistory)
+	chatHTTP := httpin.NewChatController(getHistory, getHistory)
 	chatSocket := wsin.NewChatSocketController(sendMessage, getHistory, hub)
 
 	router := gin.New()

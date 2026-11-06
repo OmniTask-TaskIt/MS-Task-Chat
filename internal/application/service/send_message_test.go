@@ -16,8 +16,8 @@ func (testChatRepository) Save(context.Context, model.Chat) (model.Chat, error) 
 func (testChatRepository) FindByID(context.Context, string) (model.Chat, error) {
 	return model.Chat{ChatID: "chat-1", Active: true}, nil
 }
-func (testChatRepository) FindByParticipantID(context.Context, int64) (model.Chat, error) {
-	return model.Chat{}, nil
+func (testChatRepository) FindByParticipantID(context.Context, string) ([]model.Chat, error) {
+	return []model.Chat{}, nil
 }
 func (testChatRepository) FindByTaskID(context.Context, string) (model.Chat, error) {
 	return model.Chat{}, nil

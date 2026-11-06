@@ -11,14 +11,30 @@ import (
 
 type ChatController struct {
 	getMessageHistory inbound.GetMessageHistoryUseCase
+	getChats          inbound.GetChatsByParticipantUseCase
 }
 
-func NewChatController(getMessageHistory inbound.GetMessageHistoryUseCase) *ChatController {
-	return &ChatController{getMessageHistory: getMessageHistory}
+func NewChatController(getMessageHistory inbound.GetMessageHistoryUseCase, getChats inbound.GetChatsByParticipantUseCase) *ChatController {
+	return &ChatController{getMessageHistory: getMessageHistory, getChats: getChats}
 }
 
 func (c *ChatController) Routes(router *gin.Engine) {
 	router.GET("/api/v1/chats/messages", c.GetMessageHistory)
+	router.GET("/api/v1/chats", c.GetChatsByParticipant)
+}
+
+func (c *ChatController) GetChatsByParticipant(ctx *gin.Context) {
+	participantID := ctx.Query("userId")
+	if participantID == "" {
+		ctx.JSON(400, gin.H{"error": "userId is required"})
+		return
+	}
+	chats, err := c.getChats.GetChatsByParticipant(ctx.Request.Context(), participantID)
+	if err != nil {
+		ctx.JSON(500, gin.H{"error": "request failed"})
+		return
+	}
+	ctx.JSON(200, chats)
 }
 
 func (c *ChatController) GetMessageHistory(ctx *gin.Context) {

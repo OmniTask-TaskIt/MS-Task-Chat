@@ -25,9 +25,7 @@ func (e *ChatNotFoundError) Unwrap() error {
 type ChatRepository interface {
 	Save(ctx context.Context, chat model.Chat) (model.Chat, error)
 	FindByID(ctx context.Context, id string) (model.Chat, error)
-	// FindByParticipantID returns one chat for the participant, preserving the
-	// current public contract even though the Redis index can contain several.
-	FindByParticipantID(ctx context.Context, participantID int64) (model.Chat, error)
+	FindByParticipantID(ctx context.Context, participantID string) ([]model.Chat, error)
 	FindByTaskID(ctx context.Context, taskID string) (model.Chat, error)
 	Update(ctx context.Context, chat model.Chat) (model.Chat, error)
 	DeleteByID(ctx context.Context, id string) error

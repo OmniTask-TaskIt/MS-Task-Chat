@@ -55,8 +55,8 @@ func TestRedisChatAndMessagePersistence(t *testing.T) {
 	if repeated.ChatID != saved.ChatID {
 		t.Fatalf("idempotent save returned %q, want %q", repeated.ChatID, saved.ChatID)
 	}
-	if _, err := chatRepository.FindByParticipantID(ctx, 202); err != nil {
-		t.Fatal(err)
+	if chats, err := chatRepository.FindByParticipantID(ctx, "202"); err != nil || len(chats) != 1 {
+		t.Fatalf("find chats by participant: chats=%d err=%v", len(chats), err)
 	}
 	if _, err := chatRepository.FindByTaskID(ctx, chat.TaskID); err != nil {
 		t.Fatal(err)

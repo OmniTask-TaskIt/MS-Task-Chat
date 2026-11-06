@@ -13,6 +13,10 @@ type GetMessageHistoryService struct {
 	messageRepository repository.MessageRepository
 }
 
+func (s *GetMessageHistoryService) GetChatsByParticipant(ctx context.Context, participantID string) ([]model.Chat, error) {
+	return s.repository.FindByParticipantID(ctx, participantID)
+}
+
 func NewGetMessageHistoryService(chatRepository repository.ChatRepository, messageRepositories ...repository.MessageRepository) *GetMessageHistoryService {
 	var messageRepository repository.MessageRepository
 	if len(messageRepositories) > 0 {

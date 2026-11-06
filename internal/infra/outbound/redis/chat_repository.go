@@ -71,12 +71,58 @@ func (r *ChatRepository) FindByID(ctx context.Context, id string) (model.Chat, e
 	return chat, nil
 }
 
-func (r *ChatRepository) FindByParticipantID(ctx context.Context, participantID int64) (model.Chat, error) {
-	ids, err := r.client.SMembers(ctx, participantIndexKey(strconv.FormatInt(participantID, 10))).Result()
-	if err != nil {
-		return model.Chat{}, err
+func (r *ChatRepository) FindByParticipantID(ctx context.Context, participantID string) ([]model.Chat, error) {
+	participantID = strings.TrimSpace(participantID)
+	if participantID == "" {
+		return []model.Chat{}, nil
 	}
-	return r.findIndexedChat(ctx, ids, participantIndexKey(strconv.FormatInt(participantID, 10)))
+	indexKey := participantIndexKey(participantID)
+	ids, err := r.client.SMembers(ctx, indexKey).Result()
+	if err != nil {
+		return nil, err
+	}
+	chats, err := r.findIndexedChats(ctx, ids, indexKey)
+	if err != nil {
+		return nil, err
+	}
+	if len(chats) > 0 {
+		return chats, nil
+	}
+
+	// Older chats may have been stored before participant string indexes existed.
+	var cursor uint64
+	for {
+		keys, next, err := r.client.Scan(ctx, cursor, chatKeyPrefix+"*", 100).Result()
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range keys {
+			if strings.HasPrefix(key, participantIndexKeyPrefix) ||
+				strings.HasPrefix(key, taskIndexKeyPrefix) ||
+				strings.HasPrefix(key, messageDataKeyPrefix) ||
+				strings.HasPrefix(key, messageSetKeyPrefix) {
+				continue
+			}
+			payload, err := r.client.Get(ctx, key).Bytes()
+			if errors.Is(err, goredis.Nil) {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			var chat model.Chat
+			if err := json.Unmarshal(payload, &chat); err != nil {
+				continue
+			}
+			if containsParticipant(chat.Participants, participantID) {
+				chats = append(chats, chat)
+			}
+		}
+		cursor = next
+		if cursor == 0 {
+			return chats, nil
+		}
+	}
 }
 
 func (r *ChatRepository) FindByTaskID(ctx context.Context, taskID string) (model.Chat, error) {
@@ -93,6 +139,7 @@ func (r *ChatRepository) findIndexedChat(ctx context.Context, ids []string, inde
 		if err == nil {
 			return chat, nil
 		}
+
 		if errors.Is(err, repository.ErrChatNotFound) {
 			_ = r.client.SRem(ctx, indexKey, id).Err()
 			continue
@@ -100,6 +147,23 @@ func (r *ChatRepository) findIndexedChat(ctx context.Context, ids []string, inde
 		return model.Chat{}, err
 	}
 	return model.Chat{}, &repository.ChatNotFoundError{ID: indexKey}
+}
+
+func (r *ChatRepository) findIndexedChats(ctx context.Context, ids []string, indexKey string) ([]model.Chat, error) {
+	chats := make([]model.Chat, 0, len(ids))
+	for _, id := range ids {
+		chat, err := r.FindByID(ctx, id)
+		if err == nil {
+			chats = append(chats, chat)
+			continue
+		}
+		if errors.Is(err, repository.ErrChatNotFound) {
+			_ = r.client.SRem(ctx, indexKey, id).Err()
+			continue
+		}
+		return nil, err
+	}
+	return chats, nil
 }
 
 func (r *ChatRepository) Update(ctx context.Context, chat model.Chat) (model.Chat, error) {
@@ -260,7 +324,12 @@ func messageDataKey(id string) string      { return messageDataKeyPrefix + id }
 func messageSetKey(id string) string       { return messageSetKeyPrefix + id }
 
 func chatIndexKeys(chat model.Chat) []string {
-	keys := make([]string, 0, 2)
+	keys := make([]string, 0, len(chat.Participants)+3)
+	for _, participantID := range chat.Participants {
+		if participantID = strings.TrimSpace(participantID); participantID != "" {
+			keys = append(keys, participantIndexKey(participantID))
+		}
+	}
 	if participantID, err := strconv.ParseInt(chat.SellerID, 10, 64); err == nil {
 		keys = append(keys, participantIndexKey(strconv.FormatInt(participantID, 10)))
 	}
@@ -271,6 +340,15 @@ func chatIndexKeys(chat model.Chat) []string {
 		keys = append(keys, taskIndexKey(chat.TaskID))
 	}
 	return unique(keys)
+}
+
+func containsParticipant(participants []string, participantID string) bool {
+	for _, participant := range participants {
+		if strings.TrimSpace(participant) == participantID {
+			return true
+		}
+	}
+	return false
 }
 
 func unique(values []string) []string {
