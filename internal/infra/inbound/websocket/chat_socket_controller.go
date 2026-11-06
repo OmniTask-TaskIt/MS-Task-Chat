@@ -61,7 +61,9 @@ func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "WebSocket controller is not configured", http.StatusInternalServerError)
 		return
 	}
-	conn, err := websocket.Accept(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
 	if err != nil {
 		return
 	}
