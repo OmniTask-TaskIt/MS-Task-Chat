@@ -41,7 +41,7 @@ func NewApp() *App {
 	chatSocket := wsin.NewChatSocketController(sendMessage, getHistory, hub)
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery())
+	router.Use(gin.Logger(), gin.Recovery(), rabbitconfig.CORSMiddleware())
 	chatHTTP.Routes(router)
 	router.GET("/ws/chat", gin.WrapH(chatSocket))
 
