@@ -4,6 +4,7 @@ import "time"
 
 type Chat struct {
 	ChatID       string    `json:"chatId"`
+	TaskName     string    `json:"taskName"`
 	SellerID     string    `json:"sellerId"`
 	BuyerID      string    `json:"buyerId"`
 	Participants []string  `json:"participants"`
