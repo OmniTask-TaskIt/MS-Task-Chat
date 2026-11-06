@@ -333,8 +333,8 @@ func chatIndexKeys(chat model.Chat) []string {
 	if participantID, err := strconv.ParseInt(chat.SellerID, 10, 64); err == nil {
 		keys = append(keys, participantIndexKey(strconv.FormatInt(participantID, 10)))
 	}
-	if chat.BuyerID != nil {
-		keys = append(keys, participantIndexKey(strconv.FormatInt(*chat.BuyerID, 10)))
+	if buyerID := strings.TrimSpace(chat.BuyerID); buyerID != "" {
+		keys = append(keys, participantIndexKey(buyerID))
 	}
 	if chat.TaskID != "" {
 		keys = append(keys, taskIndexKey(chat.TaskID))

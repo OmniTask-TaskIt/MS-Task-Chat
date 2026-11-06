@@ -5,7 +5,7 @@ import "time"
 type Chat struct {
 	ChatID       string    `json:"chatId"`
 	SellerID     string    `json:"sellerId"`
-	BuyerID      *int64    `json:"buyerId"`
+	BuyerID      string    `json:"buyerId"`
 	Participants []string  `json:"participants"`
 	Active       bool      `json:"active"`
 	CreatedAt    time.Time `json:"createdAt"`

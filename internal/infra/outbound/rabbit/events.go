@@ -49,6 +49,7 @@ func (h *Handler) HandleCreate(ctx context.Context, body []byte) error {
 	_, err := h.chats.Save(ctx, model.Chat{
 		ChatID:       event.TaskID,
 		SellerID:     event.TaskOwner,
+		BuyerID:      event.TaskAssignee,
 		Participants: []string{event.TaskOwner, event.TaskAssignee},
 		Active:       true,
 		CreatedAt:    time.Now().UTC(),

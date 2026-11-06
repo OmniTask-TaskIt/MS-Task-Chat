@@ -101,7 +101,7 @@ flowchart LR
 | --- | --- | --- |
 | `ChatID` | `string` (`chatId`) | Identificador del chat. |
 | `SellerID` | `string` (`sellerId`) | Identificador del vendedor; también se usa para el índice de participantes cuando es numérico. |
-| `BuyerID` | `*int64` (`buyerId`) | Identificador opcional del comprador. |
+| `BuyerID` | `string` (`buyerId`) | Identificador del comprador. |
 | `Participants` | `[]string` (`participants`) | IDs de los participantes del chat. |
 | `Active` | `bool` (`active`) | Estado activo del chat. |
 | `CreatedAt` | `time.Time` (`createdAt`) | Fecha de creación. |

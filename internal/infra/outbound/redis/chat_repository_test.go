@@ -33,7 +33,7 @@ func TestRedisChatAndMessagePersistence(t *testing.T) {
 	chat := model.Chat{
 		ChatID:    prefix,
 		SellerID:  "101",
-		BuyerID:   int64Ptr(202),
+		BuyerID:   "202",
 		TaskID:    prefix + "-task",
 		CreatedAt: time.Now().UTC().Truncate(time.Microsecond),
 		Active:    true,
@@ -116,8 +116,4 @@ func TestRedisChatAndMessagePersistence(t *testing.T) {
 
 func isNotFound(err error) bool {
 	return err != nil && errors.Is(err, repository.ErrChatNotFound)
-}
-
-func int64Ptr(value int64) *int64 {
-	return &value
 }
