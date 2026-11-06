@@ -218,6 +218,9 @@ func (r *MessageRepository) FindByChatID(ctx context.Context, chatID string) ([]
 	if err != nil {
 		return nil, err
 	}
+	if len(ids) == 0 {
+		return []model.Message{}, nil
+	}
 	values, err := r.client.HMGet(ctx, messageDataKey(chatID), ids...).Result()
 	if err != nil {
 		return nil, err
