@@ -62,8 +62,8 @@ func TestRedisChatAndMessagePersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first := model.Message{MessageID: "first", ChatID: chat.ChatID, SenderID: 101, Content: "one", Timestamp: chat.CreatedAt.Add(time.Second)}
-	second := model.Message{MessageID: "second", ChatID: chat.ChatID, SenderID: 202, Content: "two", Timestamp: chat.CreatedAt.Add(2 * time.Second)}
+	first := model.Message{MessageID: "first", ChatID: chat.ChatID, SenderID: "101", Content: "one", Timestamp: chat.CreatedAt.Add(time.Second)}
+	second := model.Message{MessageID: "second", ChatID: chat.ChatID, SenderID: "202", Content: "two", Timestamp: chat.CreatedAt.Add(2 * time.Second)}
 	if _, created, err := messageRepository.Save(ctx, chat.ChatID, second); err != nil || !created {
 		t.Fatalf("save second: created=%v err=%v", created, err)
 	}

@@ -35,7 +35,7 @@ func NewSendMessageService(chatRepository repository.ChatRepository, messageRepo
 	}
 }
 
-func (s *SendMessageService) SendMessage(ctx context.Context, chatID, messageID, content string, senderID int64) error {
+func (s *SendMessageService) SendMessage(ctx context.Context, chatID, messageID, content, senderID string) error {
 	chatID = strings.TrimSpace(chatID)
 	messageID = strings.TrimSpace(messageID)
 	content = strings.TrimSpace(content)
@@ -51,7 +51,8 @@ func (s *SendMessageService) SendMessage(ctx context.Context, chatID, messageID,
 	if len([]rune(content)) > MaxMessageContentLength {
 		return ErrMessageTooLarge
 	}
-	if senderID <= 0 {
+	senderID = strings.TrimSpace(senderID)
+	if senderID == "" {
 		return errors.New("authenticated sender is required")
 	}
 

@@ -120,7 +120,7 @@ se guarda en el repositorio de mensajes.
 | --- | --- | --- |
 | `MessageID` | `string` (`messageId`) | Identificador idempotente del mensaje. |
 | `ChatID` | `string` (`chatId`) | Chat al que pertenece. |
-| `SenderID` | `int64` (`senderId`) | Identidad del remitente recibida por el servicio. |
+| `SenderID` | `string` (`senderId`) | Identidad del remitente obtenida del JWT. |
 | `Content` | `string` (`content`) | Contenido del mensaje. |
 | `Timestamp` | `time.Time` (`timestamp`) | Marca temporal usada también para ordenar el historial. |
 
@@ -228,10 +228,10 @@ Para `chat:EnterRoom`:
 5. El cliente recibe `chat:history`.
 6. La conexión permanece abierta para leer y recibir nuevos eventos.
 
-No existe una autorización de participantes implementada. El único dato de
-identidad disponible es el header `X-User-ID`, que se valida como entero
-positivo y se coloca en el contexto; no es un mecanismo de autenticación
-independiente.
+No existe una autorización de participantes implementada. La identidad
+principal se obtiene del access token JWT enviado mediante
+`chat:authenticate`; `X-User-ID` solo se conserva como compatibilidad interna
+opcional.
 
 ```mermaid
 sequenceDiagram
@@ -266,7 +266,7 @@ se une a la sala.
 El evento de entrada es `chat:sendMessage`. El controlador exige que:
 
 1. El cliente ya esté en la sala indicada.
-2. Exista un `X-User-ID` válido en el contexto.
+2. La conexión esté autenticada mediante `chat:authenticate`.
 3. El caso de uso valide `chatId`, `messageId` y contenido.
 
 `SendMessageService` verifica el chat con `FindByID`, crea un `Message` con
@@ -424,6 +424,20 @@ no reemplaza un sistema de autenticación.
 
 ### Eventos de entrada
 
+Autenticar la conexión:
+
+```json
+{
+  "type": "chat:authenticate",
+  "token": "<JWT_ACCESS_TOKEN>"
+}
+```
+
+La respuesta correcta es `chat:authenticated`. El token debe ser un access
+token HS256 emitido con `JWT_SECRET`, con identidad en `sub` y un claim `role`.
+Los eventos `chat:EnterRoom` y `chat:sendMessage` se rechazan y cierran la
+conexión si no existe una autenticación válida.
+
 Entrar a una sala:
 
 ```json
@@ -444,7 +458,7 @@ Enviar un mensaje:
 }
 ```
 
-El cliente no puede enviar `senderId`; se obtiene de `X-User-ID`. El
+El cliente no puede enviar `senderId`; se obtiene del JWT. El
 `messageId` es obligatorio para validar y deduplicar el mensaje.
 
 ### Eventos de salida
@@ -514,6 +528,7 @@ Copiar `.env.example` y ajustar los valores del entorno:
 | --- | --- | --- |
 | `APP_NAME` | Está documentada en `.env.example`, pero el código actual no la consume. | No aplica. |
 | `HTTP_PORT` | Puerto HTTP y WebSocket. | `8080`. |
+| `JWT_SECRET` | Clave compartida HS256 para validar access tokens. | Vacía; debe configurarse. |
 | `REDIS_ADDR` | Dirección `host:port` de Redis. | `localhost:6379`. |
 | `REDIS_PASSWORD` | Contraseña de Redis. | Vacía. |
 | `REDIS_DB` | Número de base Redis; si no es entero se usa `0`. | `0`. |

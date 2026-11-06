@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/application/port/inbound"
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/application/service"
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/domain/model"
+	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/config"
 	wsout "github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/outbound/websocket"
 )
 
@@ -22,14 +22,38 @@ const (
 	writeTimeout            = 5 * time.Second
 )
 
+var (
+	ErrAuthenticationRequired = errors.New("authentication is required")
+	ErrAuthenticationFailed   = errors.New("invalid authentication token")
+)
+
+type TokenValidator interface {
+	Validate(token string) (string, error)
+}
+
 type ChatSocketController struct {
 	sendMessage inbound.SendMessageUseCase
 	history     inbound.GetChatHistoryUseCase
 	hub         *wsout.Hub
+	tokens      TokenValidator
 }
 
-func NewChatSocketController(sendMessage inbound.SendMessageUseCase, history inbound.GetChatHistoryUseCase, hub *wsout.Hub) *ChatSocketController {
-	return &ChatSocketController{sendMessage: sendMessage, history: history, hub: hub}
+func NewChatSocketController(
+	sendMessage inbound.SendMessageUseCase,
+	history inbound.GetChatHistoryUseCase,
+	hub *wsout.Hub,
+	tokens ...TokenValidator,
+) *ChatSocketController {
+	var tokenValidator TokenValidator
+	if len(tokens) > 0 {
+		tokenValidator = tokens[0]
+	}
+	return &ChatSocketController{
+		sendMessage: sendMessage,
+		history:     history,
+		hub:         hub,
+		tokens:      tokenValidator,
+	}
 }
 
 func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +70,7 @@ func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 	client := c.hub.Register()
 	defer c.hub.Unregister(client)
 
-	ctx := r.Context()
-	ctx = withAuthenticatedSender(ctx, r.Header.Get("X-User-ID"))
+	ctx := withAuthenticatedSender(r.Context(), r.Header.Get("X-User-ID"))
 	go c.writeLoop(ctx, conn, client)
 	conn.SetReadLimit(maxWebSocketMessageSize)
 
@@ -61,7 +84,18 @@ func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 			c.writeError(client, "invalid JSON event")
 			continue
 		}
-		if err := c.handleEvent(ctx, client, event); err != nil {
+		nextCtx, err := c.handleEvent(ctx, client, event)
+		ctx = nextCtx
+		if err != nil {
+			if errors.Is(err, ErrAuthenticationFailed) || errors.Is(err, ErrAuthenticationRequired) {
+				message := "invalid authentication token"
+				if errors.Is(err, ErrAuthenticationRequired) {
+					message = "authentication is required"
+				}
+				c.writeError(client, message)
+				_ = conn.Close(websocket.StatusPolicyViolation, "authentication failed")
+				return
+			}
 			c.writeError(client, protocolError(err))
 		}
 	}
@@ -69,47 +103,68 @@ func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 type Event struct {
 	Type      string `json:"type"`
+	Token     string `json:"token"`
 	ChatID    string `json:"chatId"`
 	Content   string `json:"content"`
 	MessageID string `json:"messageId"`
 }
 
-func (c *ChatSocketController) handleEvent(ctx context.Context, client *wsout.Client, event Event) error {
+func (c *ChatSocketController) handleEvent(
+	ctx context.Context,
+	client *wsout.Client,
+	event Event,
+) (context.Context, error) {
 	switch event.Type {
+	case "chat:authenticate":
+		if c.tokens == nil {
+			return ctx, ErrAuthenticationFailed
+		}
+		userID, err := c.tokens.Validate(event.Token)
+		if err != nil || strings.TrimSpace(userID) == "" {
+			return ctx, ErrAuthenticationFailed
+		}
+		authenticatedCtx := withAuthenticatedSender(ctx, userID)
+		if !client.Enqueue([]byte(`{"type":"chat:authenticated"}`)) {
+			c.hub.Unregister(client)
+		}
+		return authenticatedCtx, nil
 	case "chat:EnterRoom":
+		if _, ok := authenticatedSender(ctx); !ok {
+			return ctx, ErrAuthenticationRequired
+		}
 		chatID := strings.TrimSpace(event.ChatID)
 		if chatID == "" {
-			return wsout.ErrInvalidRoom
+			return ctx, wsout.ErrInvalidRoom
 		}
 		history, err := c.history.GetMessageHistoryByChatID(ctx, chatID)
 		if err != nil {
-			return err
+			return ctx, err
 		}
 		if err := c.hub.Join(client, chatID); err != nil {
-			return err
+			return ctx, err
 		}
 		payload, err := json.Marshal(struct {
 			Type string          `json:"type"`
 			Data []model.Message `json:"data"`
 		}{Type: "chat:history", Data: history})
 		if err != nil {
-			return err
+			return ctx, err
 		}
 		if !client.Enqueue(payload) {
 			c.hub.Unregister(client)
 		}
-		return nil
+		return ctx, nil
 	case "chat:sendMessage":
+		if _, ok := authenticatedSender(ctx); !ok {
+			return ctx, ErrAuthenticationRequired
+		}
 		if !c.hub.InRoom(client, strings.TrimSpace(event.ChatID)) {
-			return errors.New("client must enter the room before sending")
+			return ctx, errors.New("client must enter the room before sending")
 		}
-		senderID, ok := authenticatedSender(ctx)
-		if !ok {
-			return errors.New("authenticated sender is required; configure authentication middleware")
-		}
-		return c.sendMessage.SendMessage(ctx, event.ChatID, event.MessageID, event.Content, senderID)
+		senderID, _ := authenticatedSender(ctx)
+		return ctx, c.sendMessage.SendMessage(ctx, event.ChatID, event.MessageID, event.Content, senderID)
 	default:
-		return errors.New("unsupported event type")
+		return ctx, errors.New("unsupported event type")
 	}
 }
 
@@ -145,16 +200,12 @@ func withAuthenticatedSender(ctx context.Context, value string) context.Context 
 	if id == "" {
 		return ctx
 	}
-	var senderID int64
-	if _, err := fmt.Sscan(id, &senderID); err != nil || senderID <= 0 {
-		return ctx
-	}
-	return context.WithValue(ctx, senderContextKey{}, senderID)
+	return context.WithValue(ctx, senderContextKey{}, id)
 }
 
-func authenticatedSender(ctx context.Context) (int64, bool) {
-	senderID, ok := ctx.Value(senderContextKey{}).(int64)
-	return senderID, ok && senderID > 0
+func authenticatedSender(ctx context.Context) (string, bool) {
+	senderID, ok := ctx.Value(senderContextKey{}).(string)
+	return strings.TrimSpace(senderID), ok && strings.TrimSpace(senderID) != ""
 }
 
 func protocolError(err error) string {
@@ -162,6 +213,11 @@ func protocolError(err error) string {
 	case errors.Is(err, service.ErrInvalidChatID), errors.Is(err, service.ErrInvalidMessage),
 		errors.Is(err, service.ErrEmptyContent), errors.Is(err, service.ErrMessageTooLarge):
 		return err.Error()
+	case errors.Is(err, ErrAuthenticationRequired):
+		return "authentication is required before entering a room or sending messages"
+	case errors.Is(err, config.ErrInvalidJWT), errors.Is(err, config.ErrJWTSecretMissing),
+		errors.Is(err, ErrAuthenticationFailed):
+		return "invalid authentication token"
 	default:
 		return err.Error()
 	}

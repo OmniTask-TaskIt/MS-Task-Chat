@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -47,15 +46,9 @@ func (h *Handler) HandleCreate(ctx context.Context, body []byte) error {
 		return errors.New("chat create event taskAssignee is required")
 	}
 
-	var buyerID *int64
-	if parsedBuyerID, err := strconv.ParseInt(event.TaskAssignee, 10, 64); err == nil {
-		buyerID = &parsedBuyerID
-	}
-
 	_, err := h.chats.Save(ctx, model.Chat{
 		ChatID:       event.TaskID,
 		SellerID:     event.TaskOwner,
-		BuyerID:      buyerID,
 		Participants: []string{event.TaskOwner, event.TaskAssignee},
 		Active:       true,
 		CreatedAt:    time.Now().UTC(),

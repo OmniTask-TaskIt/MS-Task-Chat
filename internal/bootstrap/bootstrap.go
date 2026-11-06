@@ -38,7 +38,7 @@ func NewApp() *App {
 	sendMessage := service.NewSendMessageService(chatRepository, messageRepository, wsout.NewChatWebSocket(hub))
 	getHistory := service.NewGetMessageHistoryService(chatRepository, messageRepository)
 	chatHTTP := httpin.NewChatController(getHistory, getHistory)
-	chatSocket := wsin.NewChatSocketController(sendMessage, getHistory, hub)
+	chatSocket := wsin.NewChatSocketController(sendMessage, getHistory, hub, rabbitconfig.NewJWTValidatorFromEnv())
 
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery(), rabbitconfig.CORSMiddleware())
