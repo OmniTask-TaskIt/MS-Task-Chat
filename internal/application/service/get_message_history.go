@@ -14,7 +14,21 @@ type GetMessageHistoryService struct {
 }
 
 func (s *GetMessageHistoryService) GetChatsByParticipant(ctx context.Context, participantID string) ([]model.Chat, error) {
-	return s.repository.FindByParticipantID(ctx, participantID)
+	chats, err := s.repository.FindByParticipantID(ctx, participantID)
+	if err != nil {
+		return nil, err
+	}
+	if s.messageRepository == nil {
+		return chats, nil
+	}
+	for i := range chats {
+		messages, err := s.messageRepository.FindByChatID(ctx, chats[i].ChatID)
+		if err != nil {
+			return nil, err
+		}
+		chats[i].Messages = messages
+	}
+	return chats, nil
 }
 
 func NewGetMessageHistoryService(chatRepository repository.ChatRepository, messageRepositories ...repository.MessageRepository) *GetMessageHistoryService {

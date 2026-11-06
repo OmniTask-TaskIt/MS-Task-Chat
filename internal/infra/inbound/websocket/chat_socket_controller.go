@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -83,12 +84,15 @@ func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		}
 		var event Event
 		if err := json.Unmarshal(data, &event); err != nil {
+			log.Printf("[chat][WS] invalid event: %v", err)
 			c.writeError(client, "invalid JSON event")
 			continue
 		}
+		log.Printf("[chat][WS] received type=%s chatId=%s", event.Type, strings.TrimSpace(event.ChatID))
 		nextCtx, err := c.handleEvent(ctx, client, event)
 		ctx = nextCtx
 		if err != nil {
+			log.Printf("[chat][WS] event type=%s chatId=%s error=%v", event.Type, strings.TrimSpace(event.ChatID), err)
 			if errors.Is(err, ErrAuthenticationFailed) || errors.Is(err, ErrAuthenticationRequired) {
 				message := "invalid authentication token"
 				if errors.Is(err, ErrAuthenticationRequired) {

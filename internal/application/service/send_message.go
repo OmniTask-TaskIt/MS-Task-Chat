@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -79,11 +80,13 @@ func (s *SendMessageService) SendMessage(ctx context.Context, chatID, content, s
 	}
 	persisted, created, err := s.messageRepository.Save(ctx, chatID, message)
 	if err != nil {
+		log.Printf("[chat][message] persist failed chatId=%s messageId=%s error=%v", chatID, messageID, err)
 		return err
 	}
 	if !created {
 		return nil
 	}
+	log.Printf("[chat][message] persisted chatId=%s messageId=%s", chatID, persisted.MessageID)
 	return s.websocket.SendMessage(ctx, persisted, chatID)
 }
 

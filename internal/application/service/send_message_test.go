@@ -123,3 +123,53 @@ func TestSendMessageDoesNotDistributeWhenPersistenceFails(t *testing.T) {
 		t.Fatalf("message was distributed %d times after persistence failure", ws.calls)
 	}
 }
+
+func TestGetChatsByParticipantIncludesMessages(t *testing.T) {
+	messageRepository := &testMessageRepository{
+		message: model.Message{
+			MessageID: "message-1",
+			ChatID:    "chat-1",
+			Content:   "Hola",
+		},
+	}
+	service := NewGetMessageHistoryService(
+		chatRepositoryWithChat{chat: model.Chat{ChatID: "chat-1"}},
+		messageRepository,
+	)
+
+	chats, err := service.GetChatsByParticipant(context.Background(), "42")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chats) != 1 || len(chats[0].Messages) != 1 || chats[0].Messages[0].MessageID != "message-1" {
+		t.Fatalf("unexpected chats: %+v", chats)
+	}
+}
+
+type chatRepositoryWithChat struct {
+	chat model.Chat
+}
+
+func (r chatRepositoryWithChat) Save(context.Context, model.Chat) (model.Chat, error) {
+	return r.chat, nil
+}
+
+func (r chatRepositoryWithChat) FindByID(context.Context, string) (model.Chat, error) {
+	return r.chat, nil
+}
+
+func (r chatRepositoryWithChat) FindByParticipantID(context.Context, string) ([]model.Chat, error) {
+	return []model.Chat{r.chat}, nil
+}
+
+func (r chatRepositoryWithChat) FindByTaskID(context.Context, string) (model.Chat, error) {
+	return r.chat, nil
+}
+
+func (r chatRepositoryWithChat) Update(context.Context, model.Chat) (model.Chat, error) {
+	return r.chat, nil
+}
+
+func (r chatRepositoryWithChat) DeleteByID(context.Context, string) error     { return nil }
+func (r chatRepositoryWithChat) DeleteByTaskID(context.Context, string) error { return nil }
+func (r chatRepositoryWithChat) Exists(context.Context, string) (bool, error) { return true, nil }
