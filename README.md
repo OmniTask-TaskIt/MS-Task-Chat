@@ -267,16 +267,17 @@ El evento de entrada es `chat:sendMessage`. El controlador exige que:
 
 1. El cliente ya esté en la sala indicada.
 2. La conexión esté autenticada mediante `chat:authenticate`.
-3. El caso de uso valide `chatId`, `messageId` y contenido.
+3. El caso de uso valide `chatId` y contenido.
 
-`SendMessageService` verifica el chat con `FindByID`, crea un `Message` con
-timestamp UTC, lo persiste mediante `MessageRepository.Save` y solo si la
+`SendMessageService` verifica el chat con `FindByID`, genera el `messageId`
+como UUID v4, crea un `Message` con timestamp UTC, lo persiste mediante `MessageRepository.Save` y solo si la
 operación crea el mensaje invoca `ChatWs.SendMessage`. El Hub entonces
 distribuye `chat:newMessage` a los miembros conectados de esa sala.
 
-El contenido vacío es inválido y el máximo es de 4096 runas. Un reintento con
-el mismo `messageId` se reconoce en Redis y no vuelve a distribuirse. Si
-Redis falla, el servicio devuelve el error y no se emite el mensaje.
+El contenido vacío es inválido y el máximo es de 4096 runas. Cada evento
+aceptado genera un identificador nuevo; la deduplicación por identificador
+enviado por el cliente ya no forma parte del protocolo. Si Redis falla, el
+servicio devuelve el error y no se emite el mensaje.
 
 ```mermaid
 sequenceDiagram
@@ -453,13 +454,13 @@ Enviar un mensaje:
 {
   "type": "chat:sendMessage",
   "chatId": "chat-123",
-  "messageId": "msg-456",
   "content": "Hola"
 }
 ```
 
-El cliente no puede enviar `senderId`; se obtiene del JWT. El
-`messageId` es obligatorio para validar y deduplicar el mensaje.
+El cliente no puede enviar `senderId` ni `messageId`; ambos datos son
+controlados por el backend. El `senderId` se obtiene del JWT y el backend
+genera el `messageId` como UUID v4 antes de persistir y difundir el mensaje.
 
 ### Eventos de salida
 
@@ -500,7 +501,7 @@ Error de protocolo o de aplicación:
 ```json
 {
   "type": "error",
-  "error": "messageId is required"
+  "error": "message content is required"
 }
 ```
 
@@ -586,13 +587,13 @@ de integración se omite. El Makefile define `make test` como alias de
 - **Chat inexistente:** los repositorios devuelven `repository.ErrChatNotFound`
   envuelto en `ChatNotFoundError`. HTTP lo traduce a `404`; WebSocket envía un
   evento `error`.
-- **Mensaje inválido:** se rechazan `chatId` o `messageId` vacíos, contenido
-  vacío, contenido superior a 4096 runas y remitentes no positivos.
+- **Mensaje inválido:** se rechazan `chatId` o contenido vacíos, contenido
+  superior a 4096 runas y remitentes no positivos.
 - **Redis no disponible:** el arranque falla si `PING` falla. Durante una
   operación, el error se propaga; un mensaje no se distribuye si no se
   persiste correctamente.
-- **Mensajes duplicados:** el mismo `messageId` no se vuelve a guardar ni a
-  distribuir. El reintento se considera exitoso sin una segunda emisión.
+- **Identidad del mensaje:** el backend genera un UUID v4 único para cada
+  mensaje antes de guardarlo en Redis y distribuirlo.
 - **Desconexión:** el cliente se desregistra del Hub y deja de recibir
   emisiones. Los mensajes persistidos se recuperan al volver a entrar.
 - **Clientes lentos:** si el buffer de salida de 32 mensajes se llena, el Hub

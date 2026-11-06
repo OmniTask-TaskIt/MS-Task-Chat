@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,7 +16,6 @@ import (
 
 var (
 	ErrInvalidChatID   = errors.New("chatId is required")
-	ErrInvalidMessage  = errors.New("messageId is required")
 	ErrEmptyContent    = errors.New("message content is required")
 	ErrMessageTooLarge = errors.New("message content exceeds the maximum size")
 )
@@ -35,15 +36,11 @@ func NewSendMessageService(chatRepository repository.ChatRepository, messageRepo
 	}
 }
 
-func (s *SendMessageService) SendMessage(ctx context.Context, chatID, messageID, content, senderID string) error {
+func (s *SendMessageService) SendMessage(ctx context.Context, chatID, content, senderID string) error {
 	chatID = strings.TrimSpace(chatID)
-	messageID = strings.TrimSpace(messageID)
 	content = strings.TrimSpace(content)
 	if chatID == "" {
 		return ErrInvalidChatID
-	}
-	if messageID == "" {
-		return ErrInvalidMessage
 	}
 	if content == "" {
 		return ErrEmptyContent
@@ -69,6 +66,10 @@ func (s *SendMessageService) SendMessage(ctx context.Context, chatID, messageID,
 		return err
 	}
 
+	messageID, err := newMessageID()
+	if err != nil {
+		return err
+	}
 	message := model.Message{
 		MessageID: messageID,
 		ChatID:    chatID,
@@ -84,6 +85,17 @@ func (s *SendMessageService) SendMessage(ctx context.Context, chatID, messageID,
 		return nil
 	}
 	return s.websocket.SendMessage(ctx, persisted, chatID)
+}
+
+func newMessageID() (string, error) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return "", fmt.Errorf("generate message id: %w", err)
+	}
+	id[6] = (id[6] & 0x0f) | 0x40
+	id[8] = (id[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		id[0:4], id[4:6], id[6:8], id[8:10], id[10:16]), nil
 }
 
 var _ inbound.SendMessageUseCase = (*SendMessageService)(nil)

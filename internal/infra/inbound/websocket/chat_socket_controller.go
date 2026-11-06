@@ -104,11 +104,10 @@ func (c *ChatSocketController) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 type Event struct {
-	Type      string `json:"type"`
-	Token     string `json:"token"`
-	ChatID    string `json:"chatId"`
-	Content   string `json:"content"`
-	MessageID string `json:"messageId"`
+	Type    string `json:"type"`
+	Token   string `json:"token"`
+	ChatID  string `json:"chatId"`
+	Content string `json:"content"`
 }
 
 func (c *ChatSocketController) handleEvent(
@@ -164,7 +163,7 @@ func (c *ChatSocketController) handleEvent(
 			return ctx, errors.New("client must enter the room before sending")
 		}
 		senderID, _ := authenticatedSender(ctx)
-		return ctx, c.sendMessage.SendMessage(ctx, event.ChatID, event.MessageID, event.Content, senderID)
+		return ctx, c.sendMessage.SendMessage(ctx, event.ChatID, event.Content, senderID)
 	default:
 		return ctx, errors.New("unsupported event type")
 	}
@@ -212,8 +211,8 @@ func authenticatedSender(ctx context.Context) (string, bool) {
 
 func protocolError(err error) string {
 	switch {
-	case errors.Is(err, service.ErrInvalidChatID), errors.Is(err, service.ErrInvalidMessage),
-		errors.Is(err, service.ErrEmptyContent), errors.Is(err, service.ErrMessageTooLarge):
+	case errors.Is(err, service.ErrInvalidChatID), errors.Is(err, service.ErrEmptyContent),
+		errors.Is(err, service.ErrMessageTooLarge):
 		return err.Error()
 	case errors.Is(err, ErrAuthenticationRequired):
 		return "authentication is required before entering a room or sending messages"

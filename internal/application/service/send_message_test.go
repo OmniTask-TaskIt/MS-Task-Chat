@@ -81,11 +81,11 @@ func TestSendMessageBuildsAndDistributesMessage(t *testing.T) {
 	ws := &testChatWebsocket{}
 	service := NewSendMessageService(testChatRepository{}, &testMessageRepository{}, ws)
 
-	if err := service.SendMessage(context.Background(), "chat-1", "msg-1", "Hola", "42"); err != nil {
+	if err := service.SendMessage(context.Background(), "chat-1", "Hola", "42"); err != nil {
 		t.Fatal(err)
 	}
 	if ws.chatID != "chat-1" || ws.message.ChatID != "chat-1" || ws.message.SenderID != "42" ||
-		ws.message.MessageID != "msg-1" || ws.message.Content != "Hola" || ws.message.Timestamp.IsZero() {
+		ws.message.MessageID == "" || ws.message.Content != "Hola" || ws.message.Timestamp.IsZero() {
 		t.Fatalf("unexpected message: %+v", ws.message)
 	}
 }
@@ -95,19 +95,17 @@ func TestSendMessageRejectsInvalidContent(t *testing.T) {
 	tests := []struct {
 		name    string
 		chatID  string
-		msgID   string
 		content string
 		wantErr error
 	}{
-		{"missing chat", "", "msg", "hello", ErrInvalidChatID},
-		{"missing message id", "chat", "", "hello", ErrInvalidMessage},
-		{"empty content", "chat", "msg", "", ErrEmptyContent},
-		{"large content", "chat", "msg", string(make([]byte, MaxMessageContentLength+1)), ErrMessageTooLarge},
+		{"missing chat", "", "hello", ErrInvalidChatID},
+		{"empty content", "chat", "", ErrEmptyContent},
+		{"large content", "chat", string(make([]byte, MaxMessageContentLength+1)), ErrMessageTooLarge},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := service.SendMessage(context.Background(), tt.chatID, tt.msgID, tt.content, "1"); err != tt.wantErr {
+			if err := service.SendMessage(context.Background(), tt.chatID, tt.content, "1"); err != tt.wantErr {
 				t.Fatalf("expected %v, got %v", tt.wantErr, err)
 			}
 		})
@@ -118,7 +116,7 @@ func TestSendMessageDoesNotDistributeWhenPersistenceFails(t *testing.T) {
 	ws := &countingChatWebsocket{}
 	service := NewSendMessageService(testChatRepository{}, failingMessageRepository{}, ws)
 
-	if err := service.SendMessage(context.Background(), "chat-1", "msg-1", "Hola", "42"); err == nil {
+	if err := service.SendMessage(context.Background(), "chat-1", "Hola", "42"); err == nil {
 		t.Fatal("expected persistence error")
 	}
 	if ws.calls != 0 {

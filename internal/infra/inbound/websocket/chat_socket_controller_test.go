@@ -28,7 +28,7 @@ type testSender struct {
 	senderID string
 }
 
-func (s *testSender) SendMessage(_ context.Context, _, _, _, senderID string) error {
+func (s *testSender) SendMessage(_ context.Context, _, _, senderID string) error {
 	s.senderID = senderID
 	return nil
 }
@@ -87,10 +87,9 @@ func TestSendMessageRequiresAuthentication(t *testing.T) {
 	controller, client := newTestController(sender, testTokenValidator{})
 
 	_, err := controller.handleEvent(context.Background(), client, Event{
-		Type:      "chat:sendMessage",
-		ChatID:    "task-1",
-		MessageID: "message-1",
-		Content:   "hello",
+		Type:    "chat:sendMessage",
+		ChatID:  "task-1",
+		Content: "hello",
 	})
 	if err != ErrAuthenticationRequired {
 		t.Fatalf("error = %v, want %v", err, ErrAuthenticationRequired)
@@ -115,10 +114,9 @@ func TestSendMessageUsesJWTIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := controller.handleEvent(ctx, client, Event{
-		Type:      "chat:sendMessage",
-		ChatID:    "task-1",
-		MessageID: "message-1",
-		Content:   "hello",
+		Type:    "chat:sendMessage",
+		ChatID:  "task-1",
+		Content: "hello",
 	}); err != nil {
 		t.Fatal(err)
 	}
