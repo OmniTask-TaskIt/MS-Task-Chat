@@ -13,6 +13,7 @@ import (
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/application/port/outbound"
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/domain/model"
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/domain/repository"
+	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/infra/outbound/rabbit"
 )
 
 var (
@@ -27,13 +28,15 @@ type SendMessageService struct {
 	repository        repository.ChatRepository
 	messageRepository repository.MessageRepository
 	websocket         outbound.ChatWs
+	publisher		  *rabbit.EventPublisher		
 }
 
-func NewSendMessageService(chatRepository repository.ChatRepository, messageRepository repository.MessageRepository, chatWebsocket outbound.ChatWs) *SendMessageService {
+func NewSendMessageService(chatRepository repository.ChatRepository, messageRepository repository.MessageRepository, chatWebsocket outbound.ChatWs, eventPublisher *rabbit.EventPublisher) *SendMessageService {
 	return &SendMessageService{
 		repository:        chatRepository,
 		messageRepository: messageRepository,
 		websocket:         chatWebsocket,
+		publisher:		  eventPublisher,
 	}
 }
 
@@ -63,7 +66,10 @@ func (s *SendMessageService) SendMessage(ctx context.Context, chatID, content, s
 	if s.websocket == nil {
 		return errors.New("chat websocket is not configured")
 	}
-	if _, err := s.repository.FindByID(ctx, chatID); err != nil {
+	
+	chatObj, err := s.repository.FindByID(ctx, chatID)
+	if err != nil {
+		log.Printf("[chat][message] failed to retrieve chat chatId=%s error=%v", chatID, err)
 		return err
 	}
 
@@ -87,6 +93,16 @@ func (s *SendMessageService) SendMessage(ctx context.Context, chatID, content, s
 		return nil
 	}
 	log.Printf("[chat][message] persisted chatId=%s messageId=%s", chatID, persisted.MessageID)
+	
+	go func(tID string, msg model.Message) {
+		if s.publisher != nil {
+			pubErr := s.publisher.PublishChatMessage(tID, msg)
+			if pubErr != nil {
+				log.Printf("[WARN] [RABBITMQ] El chat funcionó, pero AITA no pudo procesar el evento del mensaje %s: %v", msg.MessageID, pubErr)
+			}
+		}
+	}(chatObj.TaskID, persisted)
+
 	return s.websocket.SendMessage(ctx, persisted, chatID)
 }
 
