@@ -14,6 +14,10 @@ const (
 
 	RoutingKeyChatCreate = "chat.create"
 	RoutingKeyChatDelete = "chat.delete"
+
+	// --- Configuración para AITA  ---
+	EventsExchange = "taskit.events"
+	RoutingKeyAitaEvents = "taskit.aita.events"
 )
 
 type RabbitConfig struct {

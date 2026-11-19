@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	amqp "github.com/rabbitmq/amqp091-go"
 	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/SantiagoSu15/Task-it-Chat-MS/internal/application/service"
@@ -35,7 +36,28 @@ func NewApp() *App {
 	redisClient := redisinfra.NewClientFromEnv()
 	chatRepository := redisout.NewChatRepository(redisClient)
 	messageRepository := redisout.NewMessageRepository(redisClient)
-	sendMessage := service.NewSendMessageService(chatRepository, messageRepository, wsout.NewChatWebSocket(hub))
+
+	// 1. Obtenemos la configuración de RabbitMQ
+	rabbitCfg := rabbitconfig.RabbitConfigFromEnv()
+
+	// 2. Conectamos mediante amqp.Dial y abrimos el canal para el publicador de eventos hacia AITA
+	var eventPublisher *rabbitout.EventPublisher
+	if rabbitCfg.URL != "" {
+		if conn, err := amqp.Dial(rabbitCfg.URL); err == nil {
+			if ch, err := conn.Channel(); err == nil {
+				eventPublisher = rabbitout.NewEventPublisher(ch)
+			}
+		}
+	}
+
+	// 3. Pasamos el eventPublisher al servicio de mensajes
+	sendMessage := service.NewSendMessageService(
+		chatRepository,
+		messageRepository,
+		wsout.NewChatWebSocket(hub),
+		eventPublisher,
+	)
+
 	getHistory := service.NewGetMessageHistoryService(chatRepository, messageRepository)
 	chatHTTP := httpin.NewChatController(getHistory, getHistory)
 	chatSocket := wsin.NewChatSocketController(sendMessage, getHistory, hub, rabbitconfig.NewJWTValidatorFromEnv())
